@@ -78,7 +78,7 @@ mode: <dark | light — whichever matches the palette's bg>
 
 ## Layout
 
-- Content padding: 120 px from canvas edges (1920 × 1080).
+- Content padding: 120 px from canvas edges on the 1920 × 1080 default, 72–100 px on a portrait canvas. Read `canvas` from `open-slide.config.ts` before fixing the numbers.
 - Alignment: left-aligned, single column.
 - Grid notes: optional 12-column overlay at 80 px gutter for content pages.
 
@@ -178,7 +178,7 @@ const Cover: Page = () => (
 
 ## Step 4b — Write `themes/<id>.demo.tsx`
 
-The demo is a normal slide module — same shape as `slides/<id>/index.tsx`, just sitting under `themes/` so the runtime knows it's preview-only. The dev-UI Themes panel imports it and renders it inside `SlideCanvas` (1920×1080).
+The demo is a normal slide module — same shape as `slides/<id>/index.tsx`, just sitting under `themes/` so the runtime knows it's preview-only. The dev-UI Themes panel imports it and renders it inside `SlideCanvas`, at whatever canvas the workspace is configured for.
 
 Contract:
 

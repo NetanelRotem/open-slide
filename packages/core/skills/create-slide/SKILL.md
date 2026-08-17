@@ -5,9 +5,17 @@ description: Use this skill when the user wants to create, draft, author, or gen
 
 # Create a slide in open-slide
 
-This skill owns the **workflow** for drafting a new deck. The technical reference — file contract, 1920×1080 canvas, type scale, palette, layout, assets — lives in the **`slide-authoring`** skill. Read that skill whenever you need details on *how* a page is structured. This skill assumes you'll consult it before writing code.
+This skill owns the **workflow** for drafting a new deck. The technical reference — file contract, the canvas and how its size changes the layout, type scale, palette, assets — lives in the **`slide-authoring`** skill. Read that skill whenever you need details on *how* a page is structured. This skill assumes you'll consult it before writing code.
 
 You only write files under `slides/<id>/`. Never modify `package.json`, `open-slide.config.ts`, or existing slides.
+
+## Step 0 — Read the canvas
+
+Read `canvas` from `open-slide.config.ts` before anything else. It is a workspace setting, it decides the type scale and every layout decision downstream, and it is not something you can retrofit — a deck laid out for one canvas gets clipped on another, never reflowed.
+
+No `canvas` key means the 1920 × 1080 default. If it is portrait (`'4:5'`, `'1:1'`, `'9:16'`, or any explicit width ≤ 1200), read the **Portrait canvases** part of the `slide-authoring` Canvas section now, and carry it through Steps 4–6: sequences stack instead of running across, two columns at most, and the type scale drops by about a third.
+
+If the user asks for a canvas the workspace is not set to — "make me a LinkedIn carousel" on a 16:9 workspace — say so and let them change the config. Do **not** try to fake a ratio inside a 16:9 canvas by drawing a portrait box in the middle of the page; the export is still 16:9, and the deck ends up letterboxed.
 
 ## Step 1 — Pick a theme
 
@@ -56,11 +64,14 @@ Sketch the slide as a list of page roles before writing code. Common page types:
 | Section divider  | Big label between chapters                    |
 | Content          | Heading + 2–5 bullets OR heading + one visual |
 | Big number       | One statistic the size of the canvas          |
+| Vertical flow    | A sequence stacked downward (portrait staple) |
 | Quote            | Pull-quote with attribution                   |
 | Comparison       | Two-column before/after or A vs B             |
 | Closing          | CTA, thanks, contact                          |
 
 **Rule of thumb**: one idea per page. If you're tempted to put two, split them.
+
+On a portrait canvas, drop Comparison (two columns rarely fit) and reach for Vertical flow wherever a 16:9 deck would use a row.
 
 If the deck topic naturally calls for specific real images the user must supply (product screenshots, team photos, customer dashboards), plan where those go and use `<ImagePlaceholder>` from `@open-slide/core` — see the **Image placeholders** section in `slide-authoring`. Default is **no placeholders**: only insert one when a real image is genuinely required.
 
