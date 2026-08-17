@@ -1,3 +1,4 @@
+import config from 'virtual:open-slide/config';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './canvas';
@@ -8,6 +9,8 @@ import type { SlideModule } from './sdk';
 
 const PRINT_ROOT_ID = 'os-print-root';
 const PRINT_STYLE_ID = 'os-print-style';
+
+const vectorPdf = config.export?.vectorPdf ?? false;
 
 const PRINT_STYLES = `
 @page { size: ${CANVAS_WIDTH}px ${CANVAS_HEIGHT}px; margin: 0; }
@@ -81,6 +84,31 @@ const PRINT_STYLES = `
 }
 `;
 
+/**
+ * Opt-in via `export.vectorPdf`. Chromium has no vector representation for a
+ * masked, filtered or blended layer, so it flattens the whole stacking context
+ * that contains one into a bitmap — at the layer's CSS-pixel size, which is
+ * below the printer's resolution. The page then prints as an image: the text is
+ * no longer selectable and softens as soon as the reader zooms.
+ *
+ * Removing these keeps the page vector. It is a real visual trade: the effect
+ * is gone from the PDF while the deck still shows it on screen.
+ */
+const VECTOR_PRINT_STYLES = `
+@media print {
+  #${PRINT_ROOT_ID} *,
+  #${PRINT_ROOT_ID} *::before,
+  #${PRINT_ROOT_ID} *::after {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+    filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    mix-blend-mode: normal !important;
+  }
+}
+`;
+
 export function isSafari(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
@@ -111,7 +139,7 @@ export async function exportSlideAsPdf(
 
   const style = document.createElement('style');
   style.id = PRINT_STYLE_ID;
-  style.textContent = PRINT_STYLES;
+  style.textContent = vectorPdf ? PRINT_STYLES + VECTOR_PRINT_STYLES : PRINT_STYLES;
   document.head.appendChild(style);
 
   const root = document.createElement('div');

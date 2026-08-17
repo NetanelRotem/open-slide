@@ -37,7 +37,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
@@ -546,13 +545,16 @@ export function Slide() {
   const exportMenuItems = (
     <>
       {/* Every export inherits the canvas size, and it is configurable, so state
-          it here rather than making the user open open-slide.config.ts. */}
-      <DropdownMenuLabel className="flex items-center justify-between gap-3">
+          it here rather than making the user open open-slide.config.ts. A plain
+          div, not DropdownMenuLabel: that wraps Base UI's Menu.GroupLabel, which
+          throws unless it sits inside a Menu.Group. This is a readout, not a
+          label for a group of items. */}
+      <div className="eyebrow flex items-center justify-between gap-3 px-2 py-1.5 select-none">
         {t.slide.canvasSize}
         <span className="rounded-[3px] bg-muted px-1.5 py-0.5 font-mono text-[9.5px] tracking-[0.04em] text-muted-foreground">
           {CANVAS_WIDTH} × {CANVAS_HEIGHT}
         </span>
-      </DropdownMenuLabel>
+      </div>
       <DropdownMenuItem disabled={exporting} onClick={exportHtml}>
         <FileCode2 />
         {t.slide.exportAsHtml}
