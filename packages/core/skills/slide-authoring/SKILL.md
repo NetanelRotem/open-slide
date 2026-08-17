@@ -381,7 +381,8 @@ A deck exports to PDF, HTML and image-PPTX from the viewer's export menu, which 
 - Keep those four properties on **decorative, text-free layers only**. A workspace can set `export: { vectorPdf: true }` in `open-slide.config.ts`, which hides exactly those layers from the PDF and keeps the page vector. A layer that carries text keeps its box and loses only the property, so put text somewhere else.
 - Never put text inside a blurred or blended container.
 - SVG is always vector — `<path>`, `<circle>`, `<text>` all survive. Prefer an inline SVG diagram over a raster image.
-- An `<img>` of a PNG or JPEG stays a raster image in the PDF. That is expected and fine; it does not flatten the rest of the page.
+- **Photos are fine.** An `<img>` of a PNG or JPEG stays a raster image in the PDF, and the text around it stays live vector text. The two coexist on one page; a photo does not flatten anything else. Supply it at roughly 2x its displayed size so it holds up when the reader zooms.
+- What you cannot do is put a `filter` on that photo and still expect the effect. With `vectorPdf` on it keeps the image and drops the filter. Bake the treatment into the file instead.
 
 **If the deck is for presenting on screen**, none of this matters. Use the effects.
 

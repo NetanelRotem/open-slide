@@ -249,17 +249,22 @@ function neutralizeRasterizingEffects(root: HTMLElement): void {
   }
 }
 
+const HTML_CONTENT = 'img, video, canvas, svg text, svg image, foreignObject';
+const SVG_CONTENT = 'text, textPath, image, foreignObject';
+
 /**
  * Whether an element is worth keeping once its effect is gone. Text, images and
  * media count; an empty decorative overlay does not. SVG `<title>`/`<desc>` are
  * accessibility metadata and never render, so they must not count as content.
  */
 function carriesContent(el: Element): boolean {
-  if (el instanceof SVGElement) {
-    return el.querySelector('text, textPath, image, foreignObject') !== null;
-  }
-  if ((el as HTMLElement).innerText?.trim()) return true;
-  return el.querySelector('img, video, canvas, svg text, svg image, foreignObject') !== null;
+  const selector = el instanceof SVGElement ? SVG_CONTENT : HTML_CONTENT;
+  // matches() before querySelector(): the element may *be* the content rather
+  // than contain it. A photo carrying its own `filter: grayscale(1)` is the
+  // case that matters — treated as decoration it would vanish from the PDF
+  // instead of merely losing the filter.
+  if (el.matches(selector) || el.querySelector(selector) !== null) return true;
+  return !(el instanceof SVGElement) && !!(el as HTMLElement).innerText?.trim();
 }
 
 // Strip inline-style gradients from background-image so Chromium does not
