@@ -62,7 +62,7 @@ const openSlideConfig: OpenSlideConfig = {
 
 The setting is workspace-wide and flows through the viewer, thumbnails, presenter, and the PDF, HTML, and PPTX exports — a PDF exported from a `'4:5'` workspace has 1080 × 1350 pages. Landscape presets keep the 1080px height so a deck authored at 1920 × 1080 keeps its type scale when narrowed.
 
-Slides do not reflow. The canvas is scaled to fit, so changing this on an existing deck re-frames its layout rather than adapting it.
+Slides do not reflow. The canvas is scaled to fit, so changing this on an existing deck re-frames its layout rather than adapting it. When a page's text ends up past an edge it is clipped, and open-slide warns in the console — while you author, and again per page when you export a PDF. Full-bleed decoration is ignored, so only genuine clipping is reported.
 
 ### Vector PDF export
 
