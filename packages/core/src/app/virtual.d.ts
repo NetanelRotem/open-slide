@@ -23,6 +23,7 @@ declare module 'virtual:open-slide/config' {
       showSlideUi: boolean;
       allowHtmlDownload: boolean;
     };
+    export?: { vectorPdf?: boolean };
   };
   export default config;
 }

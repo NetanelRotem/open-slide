@@ -1,13 +1,22 @@
+import config from 'virtual:open-slide/config';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './canvas';
 import { designToCssVars } from './design';
 import { SlidePageProvider } from './page-context';
-import { isFrameAnimationSettled, waitForDataWaitfor, waitForFonts } from './print-ready';
+import {
+  isFrameAnimationSettled,
+  isRasterizingStyle,
+  type RasterizingStyle,
+  waitForDataWaitfor,
+  waitForFonts,
+} from './print-ready';
 import type { SlideModule } from './sdk';
 
 const PRINT_ROOT_ID = 'os-print-root';
 const PRINT_STYLE_ID = 'os-print-style';
+
+const vectorPdf = config.export?.vectorPdf ?? false;
 
 const PRINT_STYLES = `
 @page { size: ${CANVAS_WIDTH}px ${CANVAS_HEIGHT}px; margin: 0; }
@@ -176,6 +185,7 @@ export async function exportSlideAsPdf(
 
     await waitForDataWaitfor(root);
     neutralizeGradientBackgrounds(root);
+    if (vectorPdf) neutralizeRasterizingEffects(root);
     await sleep(100); // flush layout
 
     onProgress?.({ phase: 'printing', current: total, total, percent: 99 });
@@ -189,6 +199,70 @@ export async function exportSlideAsPdf(
     root.remove();
     style.remove();
   }
+}
+
+/**
+ * Opt-in via `export.vectorPdf`. Chromium has no vector representation for a
+ * masked, filtered or blended layer, so it flattens the whole stacking context
+ * containing one into a bitmap sized in CSS pixels. The page then prints as an
+ * image: text stops being selectable and softens under zoom.
+ *
+ * Blanket-resetting the properties in CSS is the wrong cure. It *reveals* what
+ * the effect was hiding — a gradient-masked overlay becomes an opaque slab, a
+ * `mix-blend-mode: multiply` grain layer starts painting over the page instead
+ * of into it — and a `filter: none` rule also overrides the SVG `filter`
+ * presentation attribute, so a filtered `<rect>` drops back to a solid fill.
+ *
+ * So: walk the print tree instead. Layers that only exist to be decorative are
+ * hidden, which degrades gracefully. Elements that carry real content keep
+ * their box and lose only the property, so their text stays sharp and vector.
+ */
+function neutralizeRasterizingEffects(root: HTMLElement): void {
+  for (const el of root.querySelectorAll<HTMLElement>('*')) {
+    const cs = getComputedStyle(el);
+    const style: Partial<RasterizingStyle> = {
+      maskImage: cs.maskImage || cs.webkitMaskImage,
+      filter: cs.filter,
+      // -webkit-backdrop-filter has no typed alias; read it off the declaration.
+      backdropFilter: cs.backdropFilter || cs.getPropertyValue('-webkit-backdrop-filter'),
+      mixBlendMode: cs.mixBlendMode,
+    };
+    if (!isRasterizingStyle(style)) continue;
+
+    if (!carriesContent(el)) {
+      // visibility, not display: the box stays, so nothing below it reflows.
+      el.style.setProperty('visibility', 'hidden', 'important');
+      continue;
+    }
+    for (const prop of ['mask-image', '-webkit-mask-image'] as const) {
+      el.style.setProperty(prop, 'none', 'important');
+    }
+    for (const prop of ['backdrop-filter', '-webkit-backdrop-filter'] as const) {
+      el.style.setProperty(prop, 'none', 'important');
+    }
+    el.style.setProperty('mix-blend-mode', 'normal', 'important');
+    // Only CSS filters. Setting this on an SVG node would also win over its
+    // `filter="url(#…)"` presentation attribute and strip the intended paint.
+    if (!(el instanceof SVGElement)) el.style.setProperty('filter', 'none', 'important');
+  }
+}
+
+const HTML_CONTENT = 'img, video, canvas, svg text, svg image, foreignObject';
+const SVG_CONTENT = 'text, textPath, image, foreignObject';
+
+/**
+ * Whether an element is worth keeping once its effect is gone. Text, images and
+ * media count; an empty decorative overlay does not. SVG `<title>`/`<desc>` are
+ * accessibility metadata and never render, so they must not count as content.
+ */
+function carriesContent(el: Element): boolean {
+  const selector = el instanceof SVGElement ? SVG_CONTENT : HTML_CONTENT;
+  // matches() before querySelector(): the element may *be* the content rather
+  // than contain it. A photo carrying its own `filter: grayscale(1)` is the
+  // case that matters — treated as decoration it would vanish from the PDF
+  // instead of merely losing the filter.
+  if (el.matches(selector) || el.querySelector(selector) !== null) return true;
+  return !(el instanceof SVGElement) && !!(el as HTMLElement).innerText?.trim();
 }
 
 // Strip inline-style gradients from background-image so Chromium does not
@@ -297,3 +371,4 @@ function waitForAfterPrint(timeoutMs = 60_000): Promise<void> {
     window.addEventListener('afterprint', onAfter, { once: true });
   });
 }
+

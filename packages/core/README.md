@@ -64,6 +64,24 @@ The setting is workspace-wide and flows through the viewer, thumbnails, presente
 
 Slides do not reflow. The canvas is scaled to fit, so changing this on an existing deck re-frames its layout rather than adapting it.
 
+### Vector PDF export
+
+By default a PDF page comes out as a bitmap the moment anything on it uses `mask-image`, `filter`, `backdrop-filter` or `mix-blend-mode` — Chromium has no vector representation for those, so it flattens the whole stacking context that contains one, at the layer's CSS-pixel size. The text on that page stops being selectable and softens when the reader zooms in.
+
+`export.vectorPdf` strips those four properties during PDF export only:
+
+```ts
+const openSlideConfig: OpenSlideConfig = {
+  export: { vectorPdf: true },
+};
+```
+
+Layers that exist only as decoration — an empty masked overlay, a blurred glow, a `mix-blend-mode` grain sheet — are hidden. Elements that carry text, images or media keep their box and lose only the property, so their content stays sharp and vector.
+
+It is off by default because it is lossy: a page built around a blur or a mask keeps the effect on screen and in the HTML export, and loses it in the PDF. Turn it on when a fully vector PDF matters more than the effect — a deck headed for LinkedIn, or for print.
+
+To check a PDF afterwards, `BaseFont` entries should list your real fonts (a fallback like `Consolas` or `SegoeUI` means a webfont did not load in time) and there should be no full-page `/Subtype /Image` objects.
+
 ### Hosting under a subpath
 
 Set `base` to deploy the built site under a sub-directory (intranet folders, GitHub Pages project sites, reverse proxies). Use a leading and trailing slash:
