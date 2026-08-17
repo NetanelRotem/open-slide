@@ -1,6 +1,6 @@
 ---
 name: slide-authoring
-description: Technical reference for writing or editing open-slide pages — file contract, 1920×1080 canvas, type scale, layout, palette/visual direction, assets, stepped reveals, page transitions, and morph transitions. Consult this whenever you are about to write or modify any file under `slides/<id>/`, including from inside the `create-slide` or `apply-comments` workflows, or for any ad-hoc slide edit. Triggers on phrases like "edit slide", "tweak this page", "fix the layout", "change the palette", "reveal one by one", "add a transition", "morph transition", "investigate the slide framework", "how do slides work here".
+description: Technical reference for writing or editing open-slide pages — file contract, the configurable canvas (16:9, 4:5, 9:16 and friends) and the portrait rules that come with it, vector-safe PDF export, type scale, layout, palette/visual direction, assets, stepped reveals, page transitions, and morph transitions. Consult this whenever you are about to write or modify any file under `slides/<id>/`, including from inside the `create-slide` or `apply-comments` workflows, or for any ad-hoc slide edit. Triggers on phrases like "edit slide", "tweak this page", "fix the layout", "change the palette", "reveal one by one", "add a transition", "morph transition", "investigate the slide framework", "how do slides work here".
 ---
 
 # Authoring open-slide pages
@@ -72,21 +72,52 @@ This lists every `const Foo: Page = …` declaration with its line number. Read 
 
 Every page renders into a fixed pixel canvas. The framework scales it; you design as if the viewport is literally that size.
 
-The default is **1920 × 1080**, but a workspace can set another size via `canvas` in `open-slide.config.ts` (`'4:3'`, `'4:5'`, `'1:1'`, `'9:16'`, or explicit `{ width, height }`). **Check that file before writing a page** — on a portrait canvas the type scale below is too large and side-by-side layouts have to stack. Import `CANVAS_WIDTH` / `CANVAS_HEIGHT` from `@open-slide/core` if a page needs the numbers at runtime.
-
 - Use **absolute pixel values** for `font-size`, padding, positioning. No `rem`, no `vw`/`vh`, no `%` for type.
 - The root element of each page should fill the canvas: `width: '100%'; height: '100%'`.
 - Prefer inline `style={{ … }}`. Any CSS you load is global — scope classnames carefully.
 
+### Read the canvas before you write anything
+
+**Open `open-slide.config.ts` first.** The canvas is a workspace setting and every number in this skill depends on it:
+
+```ts
+canvas: '4:5',                       // preset
+canvas: { width: 1080, height: 1350 } // or explicit pixels
+```
+
+No `canvas` key means the 1920 × 1080 default. Presets:
+
+| Preset  | Size        | Content width @120px padding | Notes |
+| ------- | ----------- | ---------------------------- | ----- |
+| `16:9`  | 1920 × 1080 | 1680px | Default. Everything below is tuned for this. |
+| `4:3`   | 1440 × 1080 | 1200px | Same height, so the type scale carries over. |
+| `4:5`   | 1080 × 1350 | 840px  | LinkedIn documents. Portrait rules apply. |
+| `1:1`   | 1080 × 1080 | 840px  | Portrait rules apply. |
+| `9:16`  | 1080 × 1920 | 840px  | Stories. Portrait rules apply, tall budget. |
+
+Import `CANVAS_WIDTH` / `CANVAS_HEIGHT` from `@open-slide/core` when a page needs the numbers at runtime. Never hardcode 1920 or 1080 in a page.
+
+### Portrait canvases (width ≤ 1200)
+
+A 16:9 layout does not survive being narrowed — it gets clipped, not reflowed. On a portrait canvas:
+
+- **Sequences run downward.** Three or four cards in a row is the single most common break: flex items will not shrink below their content's min-content width, so they overflow and get cut. Stack them and put the connector arrow between rows.
+- **Two columns maximum**, and only for short text. Prefer one.
+- **Drop the type scale by roughly a third** — hero 80–110px, not 140–200px. See the table below.
+- **One idea per page** matters more, not less: the reader sees a single page at a time on a phone.
+- Padding 72–100px rather than 100–160px — you cannot spare 320px of a 1080px width.
+
 ### Type scale (start here, adjust to taste)
 
-| Element          | Size       |
-| ---------------- | ---------- |
-| Hero title       | 140–200px  |
-| Section heading  | 80–120px   |
-| Page heading     | 56–80px    |
-| Body text        | 32–44px    |
-| Caption / label  | 22–28px    |
+| Element          | 16:9 / 4:3 | Portrait (width ≤ 1200) |
+| ---------------- | ---------- | ----------------------- |
+| Hero title       | 140–200px  | 80–110px                |
+| Section heading  | 80–120px   | 56–76px                 |
+| Page heading     | 56–80px    | 44–60px                 |
+| Body text        | 32–44px    | 26–32px                 |
+| Caption / label  | 22–28px    | 16–20px                 |
+
+Body type never goes under 26px on any canvas — below that it is unreadable on a projector and on a phone alike.
 
 ### Spacing
 
@@ -94,11 +125,13 @@ The default is **1920 × 1080**, but a workspace can set another size via `canva
 - Line-height: 1.2 for headings, 1.5–1.7 for body.
 - Breathing room between elements: 32–64px.
 
-### Vertical budget — content MUST fit 1080px
+### Vertical budget — content MUST fit the canvas height
 
-The canvas does **not** scroll. Anything past the 1080px bottom edge is silently cropped. Before writing JSX, do the math on paper and confirm the page fits. This is the #1 cause of broken slides — assume you will overflow unless you've checked.
+The canvas does **not** scroll. Anything past the bottom edge is silently cropped. Before writing JSX, do the math on paper and confirm the page fits. This is the #1 cause of broken slides — assume you will overflow unless you've checked.
 
-**Usable height** = `1080 − top_padding − bottom_padding`. With 120px padding on each side that's **840px**. With 160px each side, **760px**. Pick the padding first, then design within that budget.
+**Usable height** = `CANVAS_HEIGHT − top_padding − bottom_padding`. On the 1080px-tall default, 120px padding each side leaves **840px**; 160px each side leaves **760px**. On a 4:5 canvas (1350 tall) with 80px padding you get **1190px**. Read the height from the config, pick the padding, then design within that budget.
+
+**Horizontal budget matters too, and only on narrow canvases.** `CANVAS_WIDTH − 2×padding` is the real limit for any row of items. Sum each item's min-content width plus the gaps before committing to a row — a row that does not fit does not wrap, it gets cut off.
 
 **Element height** = `font_size × line_height × number_of_lines`. A bullet that wraps to 2 lines counts as 2 lines. Add the gap below it (32–64px) before summing the next element.
 
@@ -116,15 +149,34 @@ The canvas does **not** scroll. Anything past the 1080px bottom edge is silently
 
 Swap the heading to 120px or add a 6th bullet and you're over. **Verify every page like this before you write it.**
 
+On a 4:5 canvas the same page has a 1190px budget but only 920px of width, so the constraint moves: fewer things fit side by side, and long headings wrap to two or three lines. Count the wrapped lines.
+
 **Page-level rules:**
 
 - One heading + body OR one heading + ≤5 short bullets. Not both blocks of body copy *and* a long bullet list.
 - A bullet should fit on one line at the chosen font size. If it wraps, either shorten the copy or move it to its own page.
-- Hero title pages (140–200px) carry a title + 1 subtitle + maybe an eyebrow — nothing else.
-- Section headings (80–120px) need almost nothing else on the page.
+- Hero title pages (140–200px, or 80–110px portrait) carry a title + 1 subtitle + maybe an eyebrow — nothing else.
+- Section headings (80–120px, or 56–76px portrait) need almost nothing else on the page.
 - If you find yourself raising padding, shrinking type below the scale's lower bound, or tightening body line-height under 1.4 to make things fit — **split into two pages instead**. Splitting is always the right answer when the budget is tight.
 
 **Never** use `overflow: auto/scroll`, negative margins, or transforms to hide overflow. The canvas is fixed; cropped content is gone.
+
+### The clipping warning
+
+You do not have to catch every overflow by arithmetic alone. When a page's text lands past an edge, open-slide warns in the browser console — while you author, and again per page when a PDF is exported:
+
+```
+[open-slide] my-deck page 4 overflows the 1080x1350 canvas: 460px past the
+right edge. That text is clipped here and in every export. Rework the page for
+this canvas, or change `canvas` in open-slide.config.ts.
+```
+
+Treat it as an error, not a hint. **Fix the page — never silence it by raising padding, shrinking type below the scale, or adding `overflow: hidden` further down the tree.** The usual cure on a portrait canvas is to stack a row that was laid out across.
+
+Two things it deliberately does not report, so do not rely on it for them:
+
+- **Decoration only.** Only elements holding their own text are measured. A full-bleed image or a glow pushed past the corner is a legitimate technique and stays silent — as does an image, on its own, that runs off the edge by mistake.
+- **Left and top edges.** It measures the right and bottom edges, where accidental overflow actually happens.
 
 ## Visual direction
 
@@ -309,6 +361,37 @@ The component definition stays the single source of truth for layout/styling (ch
 
 This applies whenever the *visual element* repeats, not whenever the *data* does. Pure-text lists (`<ul><li>` bullets) are fine: each `<li>` is already its own JSX node, so plain literal markup is the correct shape — no need to wrap them in a component.
 
+## Exporting, and what keeps a PDF vector
+
+A deck exports to PDF, HTML and image-PPTX from the viewer's export menu, which also shows the canvas size. PDF pages come out at exactly the canvas dimensions.
+
+**A PDF page is vector only if nothing on it forces Chromium to rasterise.** Four CSS properties do, because Chromium has no vector representation for them and flattens the whole stacking context that contains one into a bitmap sized in CSS pixels. The text on that page then stops being selectable and softens as soon as the reader zooms:
+
+| Property | Typical use in a deck |
+| --- | --- |
+| `filter` | blurred glow, drop-shadow, saturate |
+| `mask-image` | a gradient fade on an overlay or grid |
+| `backdrop-filter` | frosted-glass panel |
+| `mix-blend-mode` | grain, screen/multiply colour layers |
+
+`box-shadow` and CSS gradients are already neutralised at export time and are always safe to use.
+
+**If the deck is headed for PDF — LinkedIn, print, anything read rather than presented:**
+
+- Keep those four properties on **decorative, text-free layers only**. A workspace can set `export: { vectorPdf: true }` in `open-slide.config.ts`, which hides exactly those layers from the PDF and keeps the page vector. A layer that carries text keeps its box and loses only the property, so put text somewhere else.
+- Never put text inside a blurred or blended container.
+- SVG is always vector — `<path>`, `<circle>`, `<text>` all survive. Prefer an inline SVG diagram over a raster image.
+- An `<img>` of a PNG or JPEG stays a raster image in the PDF. That is expected and fine; it does not flatten the rest of the page.
+
+**If the deck is for presenting on screen**, none of this matters. Use the effects.
+
+Two failure modes worth recognising, because both look like a broken export rather than a design choice:
+
+- **The PDF's text is in the wrong font.** A webfont had not loaded when printing started. Export waits on `document.fonts.ready`, so this means the font never loaded at all — check the import per `references/webfonts.md`.
+- **A page is one big image.** One of the four properties above is on a layer that covers the page. Find it, and either move it off the text or turn on `vectorPdf`.
+
+To check a finished PDF: its embedded fonts should be the real ones (a fallback like `Consolas` or `SegoeUI` means a webfont did not load), and it should contain no page-sized image objects.
+
 ## Runtime behavior you get for free
 
 - Home page lists every folder under `slides/`.
@@ -322,7 +405,11 @@ This applies whenever the *visual element* repeats, not whenever the *data* does
 - [ ] `slides/<id>/index.tsx` `export default`s a non-empty `Page[]`.
 - [ ] Every page's root fills `100% × 100%`.
 - [ ] Content lives inside padding (no text kisses the edge).
-- [ ] **For every page, sum (font_size × line_height × lines) + gaps + 2×padding ≤ 1080px.** If close, split the page. No `overflow: auto` escape hatches.
+- [ ] Read `canvas` from `open-slide.config.ts`. Type scale, padding and layout match that canvas, and no page hardcodes 1920 or 1080.
+- [ ] **For every page, sum (font_size × line_height × lines) + gaps + 2×padding ≤ CANVAS_HEIGHT.** If close, split the page. No `overflow: auto` escape hatches.
+- [ ] On a portrait canvas, every row of items fits `CANVAS_WIDTH − 2×padding`, or has been stacked.
+- [ ] The browser console shows no `[open-slide] … overflows the … canvas` warning for any page.
+- [ ] If the deck is headed for PDF, no text sits inside a `filter` / `mask-image` / `backdrop-filter` / `mix-blend-mode` container.
 - [ ] No bullet wraps to a second line at the chosen font size.
 - [ ] One coherent visual direction across every page (palette + type scale).
 - [ ] Slide declares a top-level `export const design: DesignSystem = { … }` and references the values via `var(--osd-X)` (use `design.X` only when you need a JS number for arithmetic). Only omit the `design` const for a one-off slide whose palette is intentionally locked.
@@ -338,12 +425,16 @@ This applies whenever the *visual element* repeats, not whenever the *data* does
 ## Anti-patterns
 
 - ❌ Walls of text. If a page has more than ~40 words, split it.
-- ❌ Using the full canvas for body copy. Respect 100–160px padding.
-- ❌ Overflowing 1080px vertically. Cropped content is invisible — split the page.
+- ❌ Using the full canvas for body copy. Respect 100–160px padding, or 72–100px on a portrait canvas.
+- ❌ Overflowing the canvas height. Cropped content is invisible — split the page.
+- ❌ A row of three or four cards on a portrait canvas. Flex items will not shrink below their min-content width, so the last one is cut off. Stack them.
+- ❌ Ignoring an `[open-slide] … overflows` console warning, or silencing it with padding, smaller type, or another `overflow: hidden`.
+- ❌ Hardcoding 1920 or 1080 in a page. Import `CANVAS_WIDTH` / `CANVAS_HEIGHT`.
+- ❌ Text inside a blurred or blended container in a deck meant for PDF. That page exports as a flat image.
 - ❌ `overflow: auto` / `overflow: scroll` / `overflow: hidden` to "hide" too much content. The canvas doesn't scroll; you've just hidden the bug.
 - ❌ Shrinking type below the scale's lower bound, or padding below 100px, to cram more in. Split instead.
 - ❌ Bullets that wrap to a second line — either shorten or move to its own page.
-- ❌ Body type under 28px — unreadable on a projector.
+- ❌ Body type under 26px — unreadable on a projector and on a phone.
 - ❌ Inconsistent palette across pages.
 - ❌ Installing packages. Only `react`, `@open-slide/core`, and standard web APIs are available.
 - ❌ Writing CSS to a shared file. Inline styles or scoped classnames only.
