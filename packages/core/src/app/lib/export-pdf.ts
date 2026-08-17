@@ -2,6 +2,7 @@ import config from 'virtual:open-slide/config';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './canvas';
+import { contentExtent, formatOverflow, measureOverflow } from './canvas-overflow';
 import { designToCssVars } from './design';
 import { SlidePageProvider } from './page-context';
 import {
@@ -187,6 +188,7 @@ export async function exportSlideAsPdf(
     neutralizeGradientBackgrounds(root);
     if (vectorPdf) neutralizeRasterizingEffects(root);
     await sleep(100); // flush layout
+    warnOnClippedPages(frames, slideId);
 
     onProgress?.({ phase: 'printing', current: total, total, percent: 99 });
     const printDone = waitForAfterPrint();
@@ -372,3 +374,20 @@ function waitForAfterPrint(timeoutMs = 60_000): Promise<void> {
   });
 }
 
+/**
+ * The PDF is where clipping does the most damage: nobody sees the missing
+ * content until they read the file. Report it per page, once per export.
+ */
+function warnOnClippedPages(frames: HTMLElement[], slideId: string): void {
+  frames.forEach((frame, i) => {
+    const page = frame.firstElementChild as HTMLElement | null;
+    if (!page) return;
+    const overflow = measureOverflow(
+      contentExtent(page, CANVAS_WIDTH),
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+    );
+    if (!overflow) return;
+    console.warn(formatOverflow(`${slideId} page ${i + 1}`, overflow, CANVAS_WIDTH, CANVAS_HEIGHT));
+  });
+}

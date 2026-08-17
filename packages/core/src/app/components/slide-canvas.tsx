@@ -1,6 +1,14 @@
-import { type CSSProperties, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { cn } from '@/lib/utils';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../lib/canvas';
+import { warnOnOverflow } from '../lib/canvas-overflow';
 import { type DesignSystem, designToCssVars } from '../lib/design';
 
 type Props = {
@@ -12,6 +20,12 @@ type Props = {
   freezeMotion?: boolean;
   className?: string;
   design?: DesignSystem;
+  /**
+   * Warn in the console when this page's content is clipped by the canvas.
+   * Set only on the editing canvas — thumbnails render the same pages, and
+   * warning from each of them would say the same thing many times over.
+   */
+  overflowLabel?: string;
 };
 
 export function SlideCanvas({
@@ -22,8 +36,10 @@ export function SlideCanvas({
   freezeMotion = false,
   className,
   design,
+  overflowLabel,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const [fitScale, setFitScale] = useState<number | null>(null);
 
   useLayoutEffect(() => {
@@ -42,6 +58,15 @@ export function SlideCanvas({
     ro.observe(el);
     return () => ro.disconnect();
   }, [scale]);
+
+  // After paint, so the page has laid out at full canvas size.
+  useEffect(() => {
+    if (!overflowLabel) return;
+    const id = requestAnimationFrame(() => {
+      warnOnOverflow(pageRef.current, overflowLabel, CANVAS_WIDTH, CANVAS_HEIGHT);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [overflowLabel]);
 
   const measured = scale ?? fitScale;
   const s = measured ?? 1;
@@ -81,6 +106,7 @@ export function SlideCanvas({
         }
       >
         <div
+          ref={pageRef}
           data-osd-canvas
           data-osd-freeze-motion={freezeMotion ? '' : undefined}
           style={

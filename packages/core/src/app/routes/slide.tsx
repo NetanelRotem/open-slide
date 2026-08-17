@@ -822,7 +822,10 @@ export function Slide() {
                       canPrev={index > 0}
                       canNext={index < pageCount - 1}
                     />
-                    <SlideCanvas design={slide.design}>
+                    <SlideCanvas
+                      design={slide.design}
+                      overflowLabel={`${slideId} page ${index + 1}`}
+                    >
                       <SlideTransitionLayer
                         pages={pages}
                         index={index}
