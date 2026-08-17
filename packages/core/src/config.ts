@@ -1,6 +1,24 @@
 import type { CanvasOption } from './canvas';
 import type { Locale } from './locale/types';
 
+export type OpenSlideExportConfig = {
+  /**
+   * Strip the CSS features Chromium can only render by rasterising the layer
+   * they sit on: `mask-image`, `filter`, `backdrop-filter` and
+   * `mix-blend-mode`. With any of them present, a PDF page comes out as a
+   * bitmap — text stops being selectable and goes soft when zoomed.
+   *
+   * Off by default because it is lossy: a page that leans on a blur or a mask
+   * loses that effect in the PDF while keeping it on screen. Turn it on when a
+   * fully vector PDF matters more than the effect, e.g. a deck headed for
+   * LinkedIn or print.
+   *
+   * Only affects PDF export. The viewer, present mode and HTML export are
+   * untouched.
+   */
+  vectorPdf?: boolean;
+};
+
 export type OpenSlideBuildConfig = {
   showSlideBrowser?: boolean;
   showSlideUi?: boolean;
@@ -30,4 +48,5 @@ export type OpenSlideConfig = {
    */
   locale?: Locale;
   build?: OpenSlideBuildConfig;
+  export?: OpenSlideExportConfig;
 };
