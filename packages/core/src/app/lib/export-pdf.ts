@@ -4,7 +4,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './canvas';
 import { designToCssVars } from './design';
 import { SlidePageProvider } from './page-context';
-import { isFrameAnimationSettled, waitForDataWaitfor, waitForFonts } from './print-ready';
+import {
+  isFrameAnimationSettled,
+  isRasterizingStyle,
+  type RasterizingStyle,
+  waitForDataWaitfor,
+  waitForFonts,
+} from './print-ready';
 import type { SlideModule } from './sdk';
 
 const PRINT_ROOT_ID = 'os-print-root';
@@ -84,31 +90,6 @@ const PRINT_STYLES = `
 }
 `;
 
-/**
- * Opt-in via `export.vectorPdf`. Chromium has no vector representation for a
- * masked, filtered or blended layer, so it flattens the whole stacking context
- * that contains one into a bitmap — at the layer's CSS-pixel size, which is
- * below the printer's resolution. The page then prints as an image: the text is
- * no longer selectable and softens as soon as the reader zooms.
- *
- * Removing these keeps the page vector. It is a real visual trade: the effect
- * is gone from the PDF while the deck still shows it on screen.
- */
-const VECTOR_PRINT_STYLES = `
-@media print {
-  #${PRINT_ROOT_ID} *,
-  #${PRINT_ROOT_ID} *::before,
-  #${PRINT_ROOT_ID} *::after {
-    -webkit-mask-image: none !important;
-    mask-image: none !important;
-    filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    mix-blend-mode: normal !important;
-  }
-}
-`;
-
 export function isSafari(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
@@ -139,7 +120,7 @@ export async function exportSlideAsPdf(
 
   const style = document.createElement('style');
   style.id = PRINT_STYLE_ID;
-  style.textContent = vectorPdf ? PRINT_STYLES + VECTOR_PRINT_STYLES : PRINT_STYLES;
+  style.textContent = PRINT_STYLES;
   document.head.appendChild(style);
 
   const root = document.createElement('div');
@@ -204,6 +185,7 @@ export async function exportSlideAsPdf(
 
     await waitForDataWaitfor(root);
     neutralizeGradientBackgrounds(root);
+    if (vectorPdf) neutralizeRasterizingEffects(root);
     await sleep(100); // flush layout
 
     onProgress?.({ phase: 'printing', current: total, total, percent: 99 });
@@ -217,6 +199,65 @@ export async function exportSlideAsPdf(
     root.remove();
     style.remove();
   }
+}
+
+/**
+ * Opt-in via `export.vectorPdf`. Chromium has no vector representation for a
+ * masked, filtered or blended layer, so it flattens the whole stacking context
+ * containing one into a bitmap sized in CSS pixels. The page then prints as an
+ * image: text stops being selectable and softens under zoom.
+ *
+ * Blanket-resetting the properties in CSS is the wrong cure. It *reveals* what
+ * the effect was hiding — a gradient-masked overlay becomes an opaque slab, a
+ * `mix-blend-mode: multiply` grain layer starts painting over the page instead
+ * of into it — and a `filter: none` rule also overrides the SVG `filter`
+ * presentation attribute, so a filtered `<rect>` drops back to a solid fill.
+ *
+ * So: walk the print tree instead. Layers that only exist to be decorative are
+ * hidden, which degrades gracefully. Elements that carry real content keep
+ * their box and lose only the property, so their text stays sharp and vector.
+ */
+function neutralizeRasterizingEffects(root: HTMLElement): void {
+  for (const el of root.querySelectorAll<HTMLElement>('*')) {
+    const cs = getComputedStyle(el);
+    const style: Partial<RasterizingStyle> = {
+      maskImage: cs.maskImage || cs.webkitMaskImage,
+      filter: cs.filter,
+      // -webkit-backdrop-filter has no typed alias; read it off the declaration.
+      backdropFilter: cs.backdropFilter || cs.getPropertyValue('-webkit-backdrop-filter'),
+      mixBlendMode: cs.mixBlendMode,
+    };
+    if (!isRasterizingStyle(style)) continue;
+
+    if (!carriesContent(el)) {
+      // visibility, not display: the box stays, so nothing below it reflows.
+      el.style.setProperty('visibility', 'hidden', 'important');
+      continue;
+    }
+    for (const prop of ['mask-image', '-webkit-mask-image'] as const) {
+      el.style.setProperty(prop, 'none', 'important');
+    }
+    for (const prop of ['backdrop-filter', '-webkit-backdrop-filter'] as const) {
+      el.style.setProperty(prop, 'none', 'important');
+    }
+    el.style.setProperty('mix-blend-mode', 'normal', 'important');
+    // Only CSS filters. Setting this on an SVG node would also win over its
+    // `filter="url(#…)"` presentation attribute and strip the intended paint.
+    if (!(el instanceof SVGElement)) el.style.setProperty('filter', 'none', 'important');
+  }
+}
+
+/**
+ * Whether an element is worth keeping once its effect is gone. Text, images and
+ * media count; an empty decorative overlay does not. SVG `<title>`/`<desc>` are
+ * accessibility metadata and never render, so they must not count as content.
+ */
+function carriesContent(el: Element): boolean {
+  if (el instanceof SVGElement) {
+    return el.querySelector('text, textPath, image, foreignObject') !== null;
+  }
+  if ((el as HTMLElement).innerText?.trim()) return true;
+  return el.querySelector('img, video, canvas, svg text, svg image, foreignObject') !== null;
 }
 
 // Strip inline-style gradients from background-image so Chromium does not

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { waitForFonts } from './print-ready';
+import { isRasterizingStyle, waitForFonts } from './print-ready';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -28,5 +28,40 @@ describe('waitForFonts', () => {
     vi.stubGlobal('document', {});
 
     await expect(waitForFonts()).resolves.toBeUndefined();
+  });
+});
+
+describe('isRasterizingStyle', () => {
+  it('passes a plain element', () => {
+    expect(
+      isRasterizingStyle({
+        maskImage: 'none',
+        filter: 'none',
+        backdropFilter: 'none',
+        mixBlendMode: 'normal',
+      }),
+    ).toBe(false);
+  });
+
+  it('treats missing and empty values as unset', () => {
+    expect(isRasterizingStyle({})).toBe(false);
+    expect(isRasterizingStyle({ filter: '', mixBlendMode: '' })).toBe(false);
+  });
+
+  it('flags each rasterizing property on its own', () => {
+    expect(isRasterizingStyle({ maskImage: 'linear-gradient(#000, transparent)' })).toBe(true);
+    expect(isRasterizingStyle({ filter: 'blur(40px)' })).toBe(true);
+    expect(isRasterizingStyle({ backdropFilter: 'blur(8px)' })).toBe(true);
+    expect(isRasterizingStyle({ mixBlendMode: 'multiply' })).toBe(true);
+  });
+
+  it('flags an element that combines several', () => {
+    expect(
+      isRasterizingStyle({
+        maskImage: 'radial-gradient(#000, transparent)',
+        filter: 'none',
+        mixBlendMode: 'screen',
+      }),
+    ).toBe(true);
   });
 });

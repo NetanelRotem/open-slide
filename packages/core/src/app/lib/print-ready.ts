@@ -49,3 +49,22 @@ export function isFrameAnimationSettled(frame: Element): boolean {
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
+
+/** The four properties Chromium can only render by rasterising their layer. */
+export type RasterizingStyle = {
+  maskImage: string;
+  filter: string;
+  backdropFilter: string;
+  mixBlendMode: string;
+};
+
+export function isRasterizingStyle(style: Partial<RasterizingStyle>): boolean {
+  const set = (value: string | undefined, initial: string) =>
+    !!value && value !== initial && value !== '';
+  return (
+    set(style.maskImage, 'none') ||
+    set(style.filter, 'none') ||
+    set(style.backdropFilter, 'none') ||
+    set(style.mixBlendMode, 'normal')
+  );
+}

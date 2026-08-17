@@ -76,6 +76,8 @@ const openSlideConfig: OpenSlideConfig = {
 };
 ```
 
+Layers that exist only as decoration — an empty masked overlay, a blurred glow, a `mix-blend-mode` grain sheet — are hidden. Elements that carry text, images or media keep their box and lose only the property, so their content stays sharp and vector.
+
 It is off by default because it is lossy: a page built around a blur or a mask keeps the effect on screen and in the HTML export, and loses it in the PDF. Turn it on when a fully vector PDF matters more than the effect — a deck headed for LinkedIn, or for print.
 
 To check a PDF afterwards, `BaseFont` entries should list your real fonts (a fallback like `Consolas` or `SegoeUI` means a webfont did not load in time) and there should be no full-page `/Subtype /Image` objects.
